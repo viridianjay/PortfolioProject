@@ -1,0 +1,128 @@
+-- SELECTING DATA FROM THE DEATHS TABLE
+
+SELECT continent, Location, date, total_cases, new_cases, total_deaths, population
+FROM `data-analyst-portfolio-386815.Portfolio_Project.Covid_Deaths`
+ORDER BY 1,2
+
+-- What is the percentage of deaths compared to total cases per country?
+-- What is the percentage of deaths compared to total cases in the United States?
+
+SELECT Location, date, total_cases, total_deaths, (total_deaths/total_cases)*100 as Death_Percentage
+FROM `data-analyst-portfolio-386815.Portfolio_Project.Covid_Deaths`
+WHERE continent != "null"
+ORDER BY 1,2
+
+SELECT Location, date, total_cases, total_deaths, (total_deaths/total_cases)*100 as Death_Percentage
+FROM `data-analyst-portfolio-386815.Portfolio_Project.Covid_Deaths`
+WHERE Location = 'United States'
+ORDER BY 1,2
+
+-- What is the percentage of total cases vs. population in the United States?
+
+SELECT Location, date, population ,total_cases,(total_cases/population)*100 as Population_Percentage
+FROM `data-analyst-portfolio-386815.Portfolio_Project.Covid_Deaths`
+WHERE Location = 'United States'
+ORDER BY 1,2
+
+-- What are the percentages of new cases and deaths vs. population in the United States?
+
+SELECT Location, date, population, new_cases, new_deaths, (new_cases/population)*100 as New_Cases_Percentage, (new_deaths/population)*100 as New_Deaths_Percentage
+FROM `data-analyst-portfolio-386815.Portfolio_Project.Covid_Deaths`
+WHERE Location = 'United States'
+ORDER BY 1,2
+
+-- What countries have the highest infection rate vs. population?
+
+SELECT Location, population, MAX(total_cases) as Highest_Infection_Count, MAX((total_cases/population)*100) as Highest_Percentage_Infection_Count
+FROM `data-analyst-portfolio-386815.Portfolio_Project.Covid_Deaths`
+GROUP BY Location, Population
+ORDER BY 4 DESC
+
+-- What countries have the highest death rates vs. population?
+
+SELECT Location, population, MAX(total_deaths) as Highest_Death_Count, MAX((total_deaths/population)*100) as Highest_Percentage_Death_Count
+FROM `data-analyst-portfolio-386815.Portfolio_Project.Covid_Deaths`
+WHERE continent is not null
+GROUP BY Location, Population
+ORDER BY 3 DESC
+
+-- What continents have the highest death rates?
+
+SELECT Location, MAX(total_deaths) as Highest_Death_Count, MAX((total_deaths/population)*100) as Highest_Percentage_Death_Count
+FROM `data-analyst-portfolio-386815.Portfolio_Project.Covid_Deaths`
+WHERE continent is null
+GROUP BY Location
+ORDER BY 2 DESC
+-- OR
+SELECT continent, MAX(total_deaths) as Highest_Death_Count, MAX((total_deaths/population)*100) as Highest_Percentage_Death_Count
+FROM `data-analyst-portfolio-386815.Portfolio_Project.Covid_Deaths`
+WHERE continent is not null
+GROUP BY continent
+ORDER BY 2 DESC
+
+-- GLOBAL NUMBERS per day
+
+SELECT date, SUM(new_cases) as SUM_New_Cases, SUM(new_deaths) as SUM_New_Deaths, SUM(new_deaths)/SUM(new_cases)*100 as Percentage_SUM
+FROM `data-analyst-portfolio-386815.Portfolio_Project.Covid_Deaths`
+WHERE continent is not null
+  AND new_cases > 0
+GROUP BY date
+ORDER BY 1,2
+--AND below will show the numbers not organized by day
+SELECT SUM(new_cases) as SUM_New_Cases, SUM(new_deaths) as SUM_New_Deaths, SUM(new_deaths)/SUM(new_cases)*100 as Percentage_SUM
+FROM `data-analyst-portfolio-386815.Portfolio_Project.Covid_Deaths`
+WHERE continent is not null
+  AND new_cases > 0
+ORDER BY 1,2
+
+-- MOVING ONTO THE VACCINATION TABLE
+-- Creating a join
+
+SELECT *
+FROM `data-analyst-portfolio-386815.Portfolio_Project.Covid_Deaths` dea
+JOIN `data-analyst-portfolio-386815.Portfolio_Project.Covid_Vaccinations` vac
+  ON dea.location = vac.location
+  AND dea.date = vac.date 
+
+-- The next calculation will be completed in a temp table
+
+-- What is the total population that received vaccinations in each country?
+
+WITH Population_VS_Vaccination
+as 
+(
+SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations
+, SUM(vac.new_vaccinations) OVER (PARTITION BY dea.location ORDER BY dea.location,dea.date) as Rolling_Vaccination_Total
+FROM `data-analyst-portfolio-386815.Portfolio_Project.Covid_Deaths` dea
+JOIN `data-analyst-portfolio-386815.Portfolio_Project.Covid_Vaccinations` vac
+  ON dea.location = vac.location
+  AND dea.date = vac.date 
+WHERE dea.continent is not null
+--ORDER BY 2,3
+)
+SELECT *, (Rolling_Vaccination_Total/population)*100 as Vaccination_Percentage
+FROM Population_VS_Vaccination
+
+-- TEMP TABLE
+
+DROP TABLE IF EXISTS data-analyst-portfolio-386815.Portfolio_Project.PercentPopulationVaccinated;
+CREATE TABLE data-analyst-portfolio-386815.Portfolio_Project.PercentPopulationVaccinated
+(
+  Continent STRING,
+  Location STRING,
+  Date DATE,
+  Population INT64,
+  New_Vaccinations INT64,
+  Rolling_Vaccination_Total INT64
+);
+INSERT INTO data-analyst-portfolio-386815.Portfolio_Project.PercentPopulationVaccinated
+SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations
+, SUM(vac.new_vaccinations) OVER (PARTITION BY dea.location ORDER BY dea.location,dea.date) as Rolling_Vaccination_Total
+FROM `data-analyst-portfolio-386815.Portfolio_Project.Covid_Deaths` dea
+JOIN `data-analyst-portfolio-386815.Portfolio_Project.Covid_Vaccinations` vac
+  ON dea.location = vac.location
+  AND dea.date = vac.date 
+WHERE dea.continent is not null;
+--ORDER BY 2,3
+SELECT *, (Rolling_Vaccination_Total/population)*100 as Vaccination_Percentage
+FROM data-analyst-portfolio-386815.Portfolio_Project.PercentPopulationVaccinated
